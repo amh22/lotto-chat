@@ -1,5 +1,5 @@
-import { Tickets } from '../components/tickets'
+import { Chat } from '@/components/chat'
 
 export default function Home() {
-  return <Tickets />
+  return <Chat />
 }
