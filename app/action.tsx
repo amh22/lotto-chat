@@ -1,14 +1,30 @@
 import 'server-only'
 
-import { OpenAI } from 'ai/openai'
-import { createAI } from 'ai/rsc'
+import { OpenAI } from 'openai'
+import { createAI, getMutableAIState, render } from 'ai/rsc'
 import { z } from 'zod'
 import Spinner from '@/components/ui/spinner'
+
+// const Spinner = () => {
+//   return <div className='bg-red-500 py-6 text-blue-600'>Loading...</div>
+// }
 
 // Create an OpenAI API client (that's edge friendly!)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
+
+// An example of a flight card component.
+function FlightCard({ flightInfo }: { flightInfo: any }) {
+  return (
+    <div className='bg-blue-200 border-2 border-green-300'>
+      <h2>Flight Information</h2>
+      <p>Flight Number: {flightInfo.flightNumber}</p>
+      <p>Departure: {flightInfo.departure}</p>
+      <p>Arrival: {flightInfo.arrival}</p>
+    </div>
+  )
+}
 
 // An example of a function that fetches flight information from an external API.
 async function getFlightInfo(flightNumber: string) {
@@ -16,6 +32,83 @@ async function getFlightInfo(flightNumber: string) {
     flightNumber,
     departure: 'New York',
     arrival: 'San Francisco',
+  }
+}
+
+// A React SERVER ACTION that submits a user message to the AI and returns the generated UI.
+async function submitUserMessage(userInput: string) {
+  // Server Action
+  'use server'
+
+  const aiState = getMutableAIState<typeof AI>()
+
+  // Update the AI state with the new user message.
+  aiState.update([
+    ...aiState.get(),
+    {
+      role: 'user',
+      content: userInput,
+    },
+  ])
+
+  // The `render()` creates a generated, streamable UI.
+  const ui = render({
+    model: 'gpt-4-0125-preview',
+    provider: openai,
+    messages: [{ role: 'system', content: 'You are a flight assistant' }, ...aiState.get()],
+    // `text` is called when an AI returns a text response (as opposed to a tool call).
+    // Its content is streamed from the LLM, so this function will be called
+    // multiple times with `content` being incremental.
+    text: ({ content, done }) => {
+      // When it's the final content, mark the state as done and ready for the client to access.
+      if (done) {
+        aiState.done([
+          ...aiState.get(),
+          {
+            role: 'assistant',
+            content,
+          },
+        ])
+      }
+
+      return <p>{content}</p>
+    },
+    tools: {
+      get_flight_info: {
+        description: 'Get the information for a flight',
+        parameters: z
+          .object({
+            flightNumber: z.string().describe('the number of the flight'),
+          })
+          .required(),
+        render: async function* ({ flightNumber }) {
+          // Show a spinner on the client while we wait for the response.
+          yield <Spinner />
+
+          // Fetch the flight information from an external API.
+          const flightInfo = await getFlightInfo(flightNumber)
+
+          // Update the final AI state.
+          aiState.done([
+            ...aiState.get(),
+            {
+              role: 'function',
+              name: 'get_flight_info',
+              // Content can be any string to provide context to the LLM in the rest of the conversation.
+              content: JSON.stringify(flightInfo),
+            },
+          ])
+
+          // Return the flight card to the client.
+          return <FlightCard flightInfo={flightInfo} />
+        },
+      },
+    },
+  })
+
+  return {
+    id: Date.now(),
+    display: ui,
   }
 }
 
@@ -39,8 +132,8 @@ const initialUIState: {
 // AI is a context provider you wrap your application with so you can access AI and UI state in your components
 export const AI = createAI({
   actions: {
-    // Actions go here
+    submitUserMessage,
   },
-  initialUIState: [],
-  initialAIState: [],
+  initialUIState,
+  initialAIState,
 })
