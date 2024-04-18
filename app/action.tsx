@@ -5,10 +5,6 @@ import { createAI, getMutableAIState, render } from 'ai/rsc'
 import { z } from 'zod'
 import Spinner from '@/components/ui/spinner'
 
-// const Spinner = () => {
-//   return <div className='bg-red-500 py-6 text-blue-600'>Loading...</div>
-// }
-
 // Create an OpenAI API client (that's edge friendly!)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -18,6 +14,7 @@ const openai = new OpenAI({
 function FlightCard({ flightInfo }: { flightInfo: any }) {
   return (
     <div className='bg-blue-200 border-2 border-green-300'>
+      <h2>- get_flight_info TOOL-</h2>
       <h2>Flight Information</h2>
       <p>Flight Number: {flightInfo.flightNumber}</p>
       <p>Departure: {flightInfo.departure}</p>
@@ -42,7 +39,7 @@ async function submitUserMessage(userInput: string) {
 
   const aiState = getMutableAIState<typeof AI>()
 
-  // Update the AI state with the new user message.
+  // Update the AI state with the new *USER* message, thereby providing the LLM with conversation context
   aiState.update([
     ...aiState.get(),
     {
@@ -51,11 +48,14 @@ async function submitUserMessage(userInput: string) {
     },
   ])
 
-  // The `render()` creates a generated, streamable UI.
+  // The UI that will be displayed to the client
+  // The `render()` creates a generated, streamable UI
   const ui = render({
     model: 'gpt-4-0125-preview',
     provider: openai,
     messages: [{ role: 'system', content: 'You are a flight assistant' }, ...aiState.get()],
+    // Show a Spinner (loading) component to the client while the AI is processing the user input
+    initial: <Spinner />,
     // `text` is called when an AI returns a text response (as opposed to a tool call).
     // Its content is streamed from the LLM, so this function will be called
     // multiple times with `content` being incremental.
@@ -71,7 +71,8 @@ async function submitUserMessage(userInput: string) {
         ])
       }
 
-      return <p>{content}</p>
+      // Return LLM response to the client.
+      return <p>- TEXT, Not TOOL - {content}</p>
     },
     tools: {
       get_flight_info: {
@@ -82,9 +83,6 @@ async function submitUserMessage(userInput: string) {
           })
           .required(),
         render: async function* ({ flightNumber }) {
-          // Show a spinner on the client while we wait for the response.
-          yield <Spinner />
-
           // Fetch the flight information from an external API.
           const flightInfo = await getFlightInfo(flightNumber)
 
@@ -108,6 +106,7 @@ async function submitUserMessage(userInput: string) {
 
   return {
     id: Date.now(),
+    role: 'assistant',
     display: ui,
   }
 }
@@ -126,6 +125,7 @@ const initialAIState: {
 // The initial UI state that the client will keep track of, which contains the message IDs and their UI nodes.
 const initialUIState: {
   id: number
+  role: string
   display: React.ReactNode
 }[] = []
 

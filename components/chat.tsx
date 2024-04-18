@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react'
-import { useUIState, useActions } from 'ai/rsc'
+import { useUIState, useActions, useAIState } from 'ai/rsc'
 import { AI } from '@/app/action'
 import Image from 'next/image'
 import { CardContent, Card } from '@/components/ui/card'
@@ -17,24 +17,28 @@ import { Button } from '@/components/ui/button'
 
 export function Chat() {
   const [inputValue, setInputValue] = useState('')
-  const [messages, setMessages] = useUIState<typeof AI>()
+  const [messages, setMessages] = useUIState<typeof AI>() // CLIENT Side State Management for Messages
   console.log('🚀 ~ Chat ~ messages:', messages)
-  const { submitUserMessage } = useActions<typeof AI>()
+  const { submitUserMessage } = useActions<typeof AI>() // Access our Server Actions from the client
+  const [aiState, setAIState] = useAIState()
+  console.log('🚀 ~ Chat ~ aiState:', aiState)
 
   const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault()
 
-    // Add user message to UI state
+    // Add user message to UI state and show in UI
     setMessages((currentMessages: any) => [
       ...currentMessages,
       {
         id: Date.now(),
-        display: <div>{inputValue}</div>,
+        role: 'user',
+        display: <span>{inputValue}</span>,
       },
     ])
 
-    // Submit and get response message
+    // Submit and get response message from LLM
     const responseMessage = await submitUserMessage(inputValue)
+    console.log('🚀 ~ handleSubmit ~ responseMessage:', responseMessage)
     setMessages((currentMessages: any) => [...currentMessages, responseMessage])
 
     setInputValue('')
