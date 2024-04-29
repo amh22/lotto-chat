@@ -5,6 +5,16 @@ import { createAI, getMutableAIState, render } from 'ai/rsc'
 import { z } from 'zod'
 import Spinner from '@/components/ui/spinner'
 
+type AIStateItem =
+  | { readonly role: 'user' | 'assistant' | 'system'; readonly content: string }
+  | { readonly role: 'function'; readonly content: string; readonly name: string }
+
+interface UIStateItem {
+  id: number
+  role: string
+  display: React.ReactNode
+}
+
 // Create an OpenAI API client (that's edge friendly!)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -33,7 +43,7 @@ async function getFlightInfo(flightNumber: string) {
 }
 
 // A React SERVER ACTION that submits a user message to the AI and returns the generated UI.
-async function submitUserMessage(userInput: string) {
+async function submitUserMessage(userInput: string): Promise<UIStateItem> {
   // Server Action
   'use server'
 
@@ -115,19 +125,10 @@ async function submitUserMessage(userInput: string) {
 
 // TYPE DEFINITIONS
 // Define the initial state of the AI. It can be any JSON object.
-const initialAIState: {
-  role: 'user' | 'assistant' | 'system' | 'function'
-  content: string
-  id?: string
-  name?: string
-}[] = []
+const initialAIState: AIStateItem[] = []
 
 // The initial UI state that the client will keep track of, which contains the message IDs and their UI nodes.
-const initialUIState: {
-  id: number
-  role: string
-  display: React.ReactNode
-}[] = []
+const initialUIState: UIStateItem[] = []
 
 // AI is a context provider you wrap your application with so you can access AI and UI state in your components
 export const AI = createAI({
